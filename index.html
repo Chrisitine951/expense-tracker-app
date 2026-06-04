@@ -585,7 +585,7 @@
 <div class="apikey-bar">
   <span class="apikey-label">API KEY</span>
   <input class="apikey-input" id="apiKeyInput" type="password"
-    placeholder="貼上你的 Gemini API Key（AIza...）"
+    placeholder="貼上你的 Gemini API Key"
     oninput="onApiKeyChange(this.value)" />
   <span class="apikey-status" id="apiKeyStatus">未設定</span>
   <span class="apikey-hint">取得免費 Key → <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com</a></span>
@@ -730,7 +730,7 @@ function getApiKey() {
 function onApiKeyChange(val) {
   const status = document.getElementById('apiKeyStatus');
   const trimmed = val.trim();
-  if (trimmed.startsWith('AIza') && trimmed.length > 20) {
+  if (trimmed.length > 20) {
     status.textContent = '✓ 已設定';
     status.className = 'apikey-status ok';
     localStorage.setItem('screener_api_key', trimmed);
@@ -785,8 +785,8 @@ async function runScreener() {
 
   try {
     const apiKey = getApiKey();
-    if (!apiKey || !apiKey.startsWith('AIza')) {
-      logLine('請先在上方輸入有效的 Gemini API Key（AIza...）');
+    if (!apiKey || apiKey.length < 20) {
+      logLine('請先在上方輸入有效的 Gemini API Key');
       statusBar.textContent = '需要 API Key';
       btn.classList.remove('loading');
       btn.disabled = false;
