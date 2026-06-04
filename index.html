@@ -585,10 +585,10 @@
 <div class="apikey-bar">
   <span class="apikey-label">API KEY</span>
   <input class="apikey-input" id="apiKeyInput" type="password"
-    placeholder="貼上你的 Anthropic API Key（sk-ant-...）"
+    placeholder="貼上你的 Gemini API Key（AIza...）"
     oninput="onApiKeyChange(this.value)" />
   <span class="apikey-status" id="apiKeyStatus">未設定</span>
-  <span class="apikey-hint">取得 Key → <a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com</a></span>
+  <span class="apikey-hint">取得免費 Key → <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com</a></span>
 </div>
 
 <div class="main">
@@ -730,7 +730,7 @@ function getApiKey() {
 function onApiKeyChange(val) {
   const status = document.getElementById('apiKeyStatus');
   const trimmed = val.trim();
-  if (trimmed.startsWith('sk-ant-') && trimmed.length > 20) {
+  if (trimmed.startsWith('AIza') && trimmed.length > 20) {
     status.textContent = '✓ 已設定';
     status.className = 'apikey-status ok';
     localStorage.setItem('screener_api_key', trimmed);
@@ -785,39 +785,35 @@ async function runScreener() {
 
   try {
     const apiKey = getApiKey();
-    if (!apiKey || !apiKey.startsWith('sk-ant-')) {
-      logLine('請先在上方輸入有效的 API Key（sk-ant-...）');
+    if (!apiKey || !apiKey.startsWith('AIza')) {
+      logLine('請先在上方輸入有效的 Gemini API Key（AIza...）');
       statusBar.textContent = '需要 API Key';
       btn.classList.remove('loading');
       btn.disabled = false;
       return;
     }
     const prompt = buildPrompt(currentMarket);
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${getApiKey()}`;
+    const response = await fetch(geminiUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'anthropic-dangerous-direct-browser-access': 'true', 'x-api-key': getApiKey() },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 4000,
-        messages: [{ role: 'user', content: prompt }]
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.7, maxOutputTokens: 4000 }
       })
     });
 
     const data = await response.json();
 
-    if (!response.ok || data.type === 'error') {
-      const msg = data.error?.message || data.error?.type || `HTTP ${response.status}`;
+    if (!response.ok) {
+      const msg = data.error?.message || `HTTP ${response.status}`;
       throw new Error(`API錯誤：${msg}`);
     }
-
-    if (!data.content || !Array.isArray(data.content)) {
+    if (!data.candidates?.[0]?.content?.parts?.[0]?.text) {
       throw new Error(`回應格式異常：${JSON.stringify(data).slice(0, 120)}`);
     }
 
-    let rawText = '';
-    for (const block of data.content) {
-      if (block.type === 'text') rawText += block.text;
-    }
+    let rawText = data.candidates[0].content.parts[0].text;
 
     rawText = rawText.replace(/```json|```/g, '').trim();
     lastScreenResult = rawText;
@@ -841,6 +837,7 @@ async function runScreener() {
       { role: 'user', content: prompt },
       { role: 'assistant', content: rawText }
     ];
+    
 
     logLine('篩選完成！找到候選個股。', true);
     renderResults(parsed);
@@ -967,27 +964,28 @@ async function askFollowUp() {
   conversationHistory.push({ role: 'user', content: q });
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const geminiContents = conversationHistory.map(m => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }]
+    }));
+    const geminiUrl2 = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${getApiKey()}`;
+    const response = await fetch(geminiUrl2, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'anthropic-dangerous-direct-browser-access': 'true', 'x-api-key': getApiKey() },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 2000,
-        messages: conversationHistory
+        contents: geminiContents,
+        generationConfig: { temperature: 0.7, maxOutputTokens: 2000 }
       })
     });
 
     const data = await response.json();
-    if (!response.ok || data.type === 'error') {
+    if (!response.ok) {
       throw new Error(data.error?.message || `HTTP ${response.status}`);
     }
-    if (!data.content || !Array.isArray(data.content)) {
+    if (!data.candidates?.[0]?.content?.parts?.[0]?.text) {
       throw new Error('回應格式異常');
     }
-    let answer = '';
-    for (const block of data.content) {
-      if (block.type === 'text') answer += block.text;
-    }
+    let answer = data.candidates[0].content.parts[0].text;
 
     conversationHistory.push({ role: 'assistant', content: answer });
 
