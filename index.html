@@ -1,1028 +1,814 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>智能選股系統</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>記帳本</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+TC:wght@300;400;500&display=swap');
+  :root{
+    --paper:#f6f1e4;
+    --paper-line:#e3d9c0;
+    --ink:#2b3a2e;
+    --ink-soft:#5c6b5d;
+    --stamp:#a23b2e;
+    --stamp-soft:#c97b6c;
+    --gold:#b08a3e;
+    --card:#fffdf8;
+    --shadow:0 2px 8px rgba(43,58,46,0.12);
+    --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    background-image:
+      repeating-linear-gradient(transparent, transparent 27px, var(--paper-line) 28px);
+    color:var(--ink);
+    font-family:"Noto Serif TC","PingFang TC","Microsoft JhengHei",serif;
+    min-height:100vh;
+    -webkit-tap-highlight-color:transparent;
+  }
+  #app{max-width:480px;margin:0 auto;padding:18px 16px 90px;min-height:100vh;position:relative;}
 
-  :root {
-    --bg: #0d0f12;
-    --surface: #141720;
-    --surface2: #1c2030;
-    --border: rgba(255,255,255,0.07);
-    --border2: rgba(255,255,255,0.12);
-    --text: #e8eaf2;
-    --muted: #7a8099;
-    --accent: #4ade80;
-    --accent2: #60a5fa;
-    --accent3: #f59e0b;
-    --red: #f87171;
-    --mono: 'DM Mono', monospace;
-    --sans: 'Noto Sans TC', sans-serif;
+  header.topbar{
+    display:flex;align-items:baseline;justify-content:space-between;
+    border-bottom:2px solid var(--ink);
+    padding-bottom:8px;margin-bottom:18px;
+  }
+  header.topbar h1{
+    font-size:22px;letter-spacing:2px;margin:0;font-weight:700;
+  }
+  header.topbar .stamp-status{
+    font-family:"Courier New",monospace;font-size:11px;color:var(--ink-soft);
+  }
+  .stamp-status.offline{color:var(--stamp);}
+
+  .view{display:none;}
+  .view.active{display:block;animation:fadein .25s ease;}
+  @keyframes fadein{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
+
+  /* ---- 記帳輸入 ---- */
+  .amount-display{
+    text-align:right;font-family:"Courier New",monospace;
+    font-size:42px;font-weight:700;letter-spacing:1px;
+    padding:18px 8px;border-bottom:1px dashed var(--ink-soft);
+    margin-bottom:14px;min-height:60px;color:var(--ink);
+    word-break:break-all;
+  }
+  .amount-display .cur{font-size:20px;color:var(--ink-soft);margin-right:4px;}
+
+  .cat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px;}
+  .cat-chip{
+    background:var(--card);border:1.5px solid var(--paper-line);
+    border-radius:var(--radius);padding:10px 4px;text-align:center;
+    cursor:pointer;transition:.15s;box-shadow:var(--shadow);
+  }
+  .cat-chip .emo{font-size:22px;display:block;}
+  .cat-chip .name{font-size:11px;color:var(--ink-soft);margin-top:2px;display:block;}
+  .cat-chip.selected{border-color:var(--stamp);background:#fff7ef;transform:scale(1.04);}
+  .cat-chip.add-new{border-style:dashed;color:var(--ink-soft);}
+
+  .keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;}
+  .key{
+    background:var(--card);border:1px solid var(--paper-line);border-radius:10px;
+    padding:16px 0;text-align:center;font-size:20px;font-family:"Courier New",monospace;
+    box-shadow:var(--shadow);user-select:none;cursor:pointer;
+  }
+  .key:active{background:var(--paper-line);}
+  .key.fn{color:var(--stamp);font-weight:700;}
+
+  .note-input{
+    width:100%;padding:10px 12px;border:1px solid var(--paper-line);border-radius:10px;
+    background:var(--card);font-family:inherit;font-size:14px;margin-bottom:12px;
   }
 
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--sans);
-    font-size: 14px;
-    line-height: 1.6;
-    min-height: 100vh;
+  .btn-save{
+    width:100%;padding:14px;background:var(--ink);color:var(--paper);
+    border:none;border-radius:var(--radius);font-size:16px;letter-spacing:3px;
+    font-weight:700;cursor:pointer;box-shadow:var(--shadow);
   }
+  .btn-save:active{transform:scale(.98);}
+  .btn-save:disabled{opacity:.4;}
 
-  header {
-    border-bottom: 1px solid var(--border);
-    padding: 20px 28px 16px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    background: var(--surface);
+  /* ---- 總覽 ---- */
+  .summary-card{
+    background:var(--card);border-radius:var(--radius);padding:16px;margin-bottom:14px;
+    box-shadow:var(--shadow);border:1px solid var(--paper-line);
   }
+  .summary-row{display:flex;justify-content:space-between;align-items:flex-end;}
+  .summary-row .label{font-size:12px;color:var(--ink-soft);letter-spacing:1px;}
+  .summary-row .num{font-family:"Courier New",monospace;font-size:26px;font-weight:700;}
+  .summary-divider{height:1px;background:var(--paper-line);margin:10px 0;}
 
-  .logo {
-    font-family: var(--mono);
-    font-size: 13px;
-    color: var(--accent);
-    letter-spacing: 0.1em;
+  .pie-wrap{display:flex;align-items:center;gap:16px;}
+  .legend{flex:1;font-size:12px;}
+  .legend .li{display:flex;align-items:center;gap:6px;margin-bottom:5px;}
+  .legend .dot{width:9px;height:9px;border-radius:2px;flex-shrink:0;}
+  .legend .amt{margin-left:auto;font-family:"Courier New",monospace;}
+
+  .month-switch{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:12px;}
+  .month-switch button{background:none;border:none;font-size:18px;cursor:pointer;color:var(--ink);}
+  .month-switch .ym{font-weight:700;letter-spacing:2px;}
+
+  .entry-list{list-style:none;padding:0;margin:0;}
+  .entry-list .day-head{font-size:12px;color:var(--ink-soft);margin:14px 0 6px;letter-spacing:1px;}
+  .entry-item{
+    display:flex;align-items:center;gap:10px;padding:9px 4px;
+    border-bottom:1px solid var(--paper-line);
   }
+  .entry-item .emo{font-size:18px;width:24px;text-align:center;}
+  .entry-item .meta{flex:1;}
+  .entry-item .meta .c{font-size:13px;}
+  .entry-item .meta .n{font-size:11px;color:var(--ink-soft);}
+  .entry-item .amt{font-family:"Courier New",monospace;font-weight:700;color:var(--stamp);}
+  .entry-item .del{color:var(--ink-soft);font-size:14px;padding:4px 6px;cursor:pointer;}
+  .empty-state{text-align:center;color:var(--ink-soft);padding:40px 0;font-size:13px;}
 
-  .header-sub {
-    font-size: 11px;
-    color: var(--muted);
-    font-family: var(--mono);
+  /* ---- 設定 ---- */
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-size:12px;color:var(--ink-soft);margin-bottom:4px;letter-spacing:1px;}
+  .field input{
+    width:100%;padding:10px 12px;border:1px solid var(--paper-line);border-radius:10px;
+    background:var(--card);font-family:"Courier New",monospace;font-size:14px;
   }
-
-  .last-run {
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--muted);
+  .sync-status-box{
+    background:var(--card);border:1px solid var(--paper-line);border-radius:var(--radius);
+    padding:14px;margin-bottom:14px;font-size:13px;line-height:1.7;
   }
-
-  .main {
-    display: grid;
-    grid-template-columns: 260px 1fr;
-    min-height: calc(100vh - 61px);
+  .sync-status-box b{color:var(--stamp);}
+  .btn-secondary{
+    width:100%;padding:12px;background:var(--card);color:var(--ink);
+    border:1.5px solid var(--ink);border-radius:var(--radius);font-size:14px;
+    font-weight:700;cursor:pointer;margin-bottom:10px;letter-spacing:1px;
   }
-
-  /* SIDEBAR */
-  .sidebar {
-    background: var(--surface);
-    border-right: 1px solid var(--border);
-    padding: 20px 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
+  .cat-manage-list{margin-bottom:14px;}
+  .cat-manage-item{
+    display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid var(--paper-line);
   }
+  .cat-manage-item .emo{width:24px;text-align:center;}
+  .cat-manage-item .name{flex:1;font-size:14px;}
+  .cat-manage-item .del{color:var(--stamp-soft);cursor:pointer;font-size:13px;}
 
-  .sidebar-section-title {
-    font-family: var(--mono);
-    font-size: 10px;
-    letter-spacing: 0.12em;
-    color: var(--muted);
-    text-transform: uppercase;
-    margin-bottom: 10px;
+  /* ---- modal ---- */
+  .modal-overlay{
+    position:fixed;inset:0;background:rgba(43,58,46,.45);display:none;
+    align-items:center;justify-content:center;z-index:50;padding:20px;
   }
-
-  .market-btn {
-    width: 100%;
-    text-align: left;
-    padding: 10px 14px;
-    background: transparent;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    color: var(--muted);
-    font-family: var(--sans);
-    font-size: 13px;
-    cursor: pointer;
-    margin-bottom: 6px;
-    transition: all 0.15s;
-    display: flex;
-    align-items: center;
-    gap: 10px;
+  .modal-overlay.show{display:flex;}
+  .modal-box{
+    background:var(--paper);border-radius:var(--radius);padding:18px;width:100%;max-width:340px;
+    box-shadow:0 10px 30px rgba(0,0,0,.25);
   }
-
-  .market-btn:hover { border-color: var(--border2); color: var(--text); }
-  .market-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(74,222,128,0.07); }
-
-  .market-dot {
-    width: 7px; height: 7px;
-    border-radius: 50%;
-    background: currentColor;
-    flex-shrink: 0;
+  .modal-box h3{margin:0 0 12px;font-size:16px;letter-spacing:1px;}
+  .modal-box input{
+    width:100%;padding:10px;border:1px solid var(--paper-line);border-radius:8px;
+    margin-bottom:10px;font-family:inherit;background:var(--card);
   }
+  .modal-actions{display:flex;gap:8px;}
+  .modal-actions button{flex:1;padding:10px;border-radius:8px;border:none;cursor:pointer;font-weight:700;}
+  .modal-actions .cancel{background:var(--card);border:1px solid var(--paper-line);}
+  .modal-actions .confirm{background:var(--ink);color:var(--paper);}
 
-  .criteria-block {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 12px 14px;
-    margin-bottom: 8px;
-    font-size: 12px;
+  .toast{
+    position:fixed;bottom:84px;left:50%;transform:translateX(-50%);
+    background:var(--ink);color:var(--paper);padding:9px 18px;border-radius:20px;
+    font-size:12px;z-index:60;opacity:0;transition:opacity .3s;letter-spacing:1px;
+    pointer-events:none;
   }
+  .toast.show{opacity:1;}
 
-  .criteria-title {
-    font-family: var(--mono);
-    font-size: 10px;
-    color: var(--accent2);
-    margin-bottom: 8px;
-    letter-spacing: 0.05em;
+  /* ---- tab bar ---- */
+  nav.tabbar{
+    position:fixed;bottom:0;left:0;right:0;background:var(--card);
+    border-top:1px solid var(--paper-line);display:flex;
+    max-width:480px;margin:0 auto;box-shadow:0 -2px 8px rgba(0,0,0,.06);
+    padding-bottom:env(safe-area-inset-bottom);
   }
-
-  .criteria-item {
-    color: var(--muted);
-    padding: 2px 0;
-    display: flex;
-    align-items: baseline;
-    gap: 6px;
+  nav.tabbar button{
+    flex:1;background:none;border:none;padding:11px 0 8px;cursor:pointer;
+    color:var(--ink-soft);font-family:inherit;
   }
-
-  .criteria-item::before {
-    content: '·';
-    color: var(--accent);
-    font-size: 16px;
-    line-height: 1;
-  }
-
-  .source-link {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 7px 10px;
-    background: transparent;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    color: var(--muted);
-    font-size: 11px;
-    font-family: var(--mono);
-    margin-bottom: 5px;
-    cursor: default;
-  }
-
-  .source-dot {
-    width: 5px; height: 5px;
-    border-radius: 50%;
-    background: var(--accent2);
-    flex-shrink: 0;
-  }
-
-  /* MAIN CONTENT */
-  .content {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .toolbar {
-    padding: 16px 24px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    background: var(--surface);
-  }
-
-  .run-btn {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 9px 20px;
-    background: var(--accent);
-    color: #0d0f12;
-    border: none;
-    border-radius: 8px;
-    font-family: var(--mono);
-    font-size: 12px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: opacity 0.15s;
-    letter-spacing: 0.04em;
-  }
-
-  .run-btn:hover { opacity: 0.85; }
-  .run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-  .run-btn .spinner {
-    width: 12px; height: 12px;
-    border: 2px solid rgba(0,0,0,0.3);
-    border-top-color: #000;
-    border-radius: 50%;
-    animation: spin 0.7s linear infinite;
-    display: none;
-  }
-
-  .run-btn.loading .spinner { display: block; }
-  .run-btn.loading .btn-label { display: none; }
-
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  .market-toggle {
-    display: flex;
-    gap: 4px;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 3px;
-  }
-
-  .toggle-opt {
-    padding: 5px 14px;
-    border-radius: 6px;
-    font-size: 12px;
-    font-family: var(--mono);
-    cursor: pointer;
-    color: var(--muted);
-    border: none;
-    background: none;
-    transition: all 0.15s;
-  }
-
-  .toggle-opt.active { background: var(--surface); color: var(--text); }
-
-  .status-bar {
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--muted);
-    flex: 1;
-    text-align: right;
-  }
-
-  /* RESULTS AREA */
-  .results {
-    flex: 1;
-    padding: 20px 24px;
-    overflow-y: auto;
-  }
-
-  .empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 14px;
-    height: 300px;
-    color: var(--muted);
-    text-align: center;
-  }
-
-  .empty-icon {
-    font-size: 36px;
-    opacity: 0.3;
-  }
-
-  .empty-state h3 { font-size: 15px; font-weight: 400; color: var(--text); opacity: 0.5; }
-  .empty-state p { font-size: 12px; max-width: 280px; }
-
-  /* STREAMING LOG */
-  .log-box {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 16px 18px;
-    margin-bottom: 20px;
-    font-family: var(--mono);
-    font-size: 12px;
-    color: var(--muted);
-    max-height: 180px;
-    overflow-y: auto;
-    line-height: 1.8;
-    display: none;
-  }
-
-  .log-box.active { display: block; }
-
-  .log-line { display: flex; gap: 10px; }
-  .log-time { color: var(--accent); opacity: 0.6; flex-shrink: 0; }
-  .log-msg { color: var(--muted); }
-  .log-msg.highlight { color: var(--text); }
-
-  /* STOCK CARDS */
-  .section-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin: 0 0 14px;
-  }
-
-  .section-flag { font-size: 18px; }
-
-  .section-title {
-    font-family: var(--mono);
-    font-size: 11px;
-    letter-spacing: 0.1em;
-    color: var(--muted);
-    text-transform: uppercase;
-  }
-
-  .section-count {
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--accent);
-    background: rgba(74,222,128,0.1);
-    padding: 2px 8px;
-    border-radius: 4px;
-  }
-
-  .cards-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 12px;
-    margin-bottom: 28px;
-  }
-
-  .stock-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 16px 18px;
-    transition: border-color 0.15s;
-    cursor: pointer;
-  }
-
-  .stock-card:hover { border-color: var(--border2); }
-
-  .card-top {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    margin-bottom: 10px;
-  }
-
-  .ticker-block {}
-  .ticker-sym {
-    font-family: var(--mono);
-    font-size: 15px;
-    font-weight: 500;
-    color: var(--text);
-  }
-
-  .ticker-name {
-    font-size: 11px;
-    color: var(--muted);
-    margin-top: 2px;
-  }
-
-  .badge {
-    font-family: var(--mono);
-    font-size: 10px;
-    padding: 3px 8px;
-    border-radius: 4px;
-    letter-spacing: 0.05em;
-    flex-shrink: 0;
-  }
-
-  .badge-value { background: rgba(74,222,128,0.12); color: var(--accent); border: 1px solid rgba(74,222,128,0.2); }
-  .badge-growth { background: rgba(96,165,250,0.12); color: var(--accent2); border: 1px solid rgba(96,165,250,0.2); }
-  .badge-recovery { background: rgba(245,158,11,0.12); color: var(--accent3); border: 1px solid rgba(245,158,11,0.2); }
-
-  .metrics-row {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 10px;
-    flex-wrap: wrap;
-  }
-
-  .metric-pill {
-    font-family: var(--mono);
-    font-size: 10px;
-    padding: 3px 8px;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    color: var(--muted);
-  }
-
-  .metric-pill span { color: var(--text); }
-
-  .card-desc {
-    font-size: 12px;
-    color: var(--muted);
-    line-height: 1.7;
-    margin-bottom: 10px;
-  }
-
-  .card-risk {
-    font-size: 11px;
-    color: var(--red);
-    opacity: 0.7;
-    display: flex;
-    gap: 6px;
-    align-items: flex-start;
-  }
-
-  .score-bar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px solid var(--border);
-  }
-
-  .score-label { font-family: var(--mono); font-size: 10px; color: var(--muted); width: 60px; flex-shrink: 0; }
-
-  .bar-track {
-    flex: 1;
-    height: 4px;
-    background: var(--surface2);
-    border-radius: 2px;
-    overflow: hidden;
-  }
-
-  .bar-fill {
-    height: 100%;
-    border-radius: 2px;
-    transition: width 1s ease;
-  }
-
-  .bar-val { font-family: var(--mono); font-size: 10px; color: var(--text); width: 28px; text-align: right; }
-
-  /* DISCLAIMER */
-  .disclaimer {
-    margin-top: 24px;
-    padding: 12px 16px;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    font-size: 11px;
-    color: var(--muted);
-    line-height: 1.7;
-  }
-
-  /* ANALYSIS PANEL */
-  .analysis-panel {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 18px 20px;
-    margin-bottom: 20px;
-    display: none;
-  }
-
-  .analysis-panel.active { display: block; }
-
-  .analysis-title {
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--accent2);
-    letter-spacing: 0.08em;
-    margin-bottom: 12px;
-  }
-
-  .analysis-content {
-    font-size: 13px;
-    color: var(--text);
-    line-height: 1.8;
-    white-space: pre-wrap;
-  }
-
-  .cursor-blink::after {
-    content: '▋';
-    animation: blink 1s step-end infinite;
-    color: var(--accent);
-  }
-
-  @keyframes blink { 50% { opacity: 0; } }
-
-  .chat-input-row {
-    display: flex;
-    gap: 8px;
-    margin-top: 14px;
-  }
-
-  .chat-input {
-    flex: 1;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 7px;
-    padding: 9px 14px;
-    color: var(--text);
-    font-family: var(--sans);
-    font-size: 13px;
-    outline: none;
-    transition: border-color 0.15s;
-  }
-
-  .chat-input:focus { border-color: var(--border2); }
-  .chat-input::placeholder { color: var(--muted); }
-
-  .ask-btn {
-    padding: 9px 18px;
-    background: transparent;
-    border: 1px solid var(--border2);
-    border-radius: 7px;
-    color: var(--accent2);
-    font-family: var(--mono);
-    font-size: 12px;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-
-  .ask-btn:hover { background: rgba(96,165,250,0.1); }
-  .ask-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-  /* SCROLLBAR */
-  ::-webkit-scrollbar { width: 5px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
-
-  .apikey-bar {
-    background: var(--surface2);
-    border-bottom: 1px solid var(--border);
-    padding: 10px 28px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-  .apikey-label {
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--muted);
-    white-space: nowrap;
-  }
-  .apikey-input {
-    flex: 1;
-    max-width: 380px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 7px 12px;
-    color: var(--text);
-    font-family: var(--mono);
-    font-size: 12px;
-    outline: none;
-    transition: border-color 0.15s;
-  }
-  .apikey-input:focus { border-color: var(--accent2); }
-  .apikey-input::placeholder { color: var(--muted); }
-  .apikey-status {
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--muted);
-  }
-  .apikey-status.ok { color: var(--accent); }
-  .apikey-hint {
-    font-size: 11px;
-    color: var(--muted);
-    margin-left: auto;
-  }
-  .apikey-hint a { color: var(--accent2); text-decoration: none; }
-
+  nav.tabbar button .ic{display:block;font-size:19px;}
+  nav.tabbar button .lb{display:block;font-size:10px;margin-top:2px;letter-spacing:1px;}
+  nav.tabbar button.active{color:var(--stamp);}
 </style>
 </head>
 <body>
+<div id="app">
 
-<header>
-  <div>
-    <div class="logo">◈ STOCK SCREENER</div>
-    <div class="header-sub">AI 驅動選股系統 · 台股 + 美股</div>
+  <header class="topbar">
+    <h1>記 帳 本</h1>
+    <span class="stamp-status" id="syncStatus">—</span>
+  </header>
+
+  <!-- ============ 記帳 ============ -->
+  <section class="view active" id="view-record">
+    <div class="amount-display" id="amountDisplay"><span class="cur">NT$</span>0</div>
+
+    <div class="cat-grid" id="catGrid"></div>
+
+    <input class="note-input" id="noteInput" placeholder="備註（選填）">
+
+    <div class="keypad" id="keypad">
+      <div class="key" data-k="1">1</div><div class="key" data-k="2">2</div><div class="key" data-k="3">3</div>
+      <div class="key" data-k="4">4</div><div class="key" data-k="5">5</div><div class="key" data-k="6">6</div>
+      <div class="key" data-k="7">7</div><div class="key" data-k="8">8</div><div class="key" data-k="9">9</div>
+      <div class="key fn" data-k="back">⌫</div><div class="key" data-k="0">0</div><div class="key" data-k=".">.</div>
+    </div>
+
+    <button class="btn-save" id="saveBtn" disabled>記　　下</button>
+  </section>
+
+  <!-- ============ 總覽 ============ -->
+  <section class="view" id="view-overview">
+    <div class="month-switch">
+      <button id="prevMonth">‹</button>
+      <span class="ym" id="ymLabel">—</span>
+      <button id="nextMonth">›</button>
+    </div>
+
+    <div class="summary-card">
+      <div class="summary-row">
+        <span class="label">今日支出</span>
+        <span class="num" id="todayTotal">$0</span>
+      </div>
+      <div class="summary-divider"></div>
+      <div class="summary-row">
+        <span class="label">本月支出</span>
+        <span class="num" id="monthTotal">$0</span>
+      </div>
+    </div>
+
+    <div class="summary-card">
+      <div class="pie-wrap">
+        <div id="pieChart"></div>
+        <div class="legend" id="pieLegend"></div>
+      </div>
+    </div>
+
+    <ul class="entry-list" id="entryList"></ul>
+  </section>
+
+  <!-- ============ 設定 ============ -->
+  <section class="view" id="view-settings">
+    <div class="sync-status-box" id="settingsStatusBox">尚未設定 GitHub 同步</div>
+
+    <div class="field">
+      <label>GitHub 帳號</label>
+      <input id="ghUser" placeholder="例如 Christine951">
+    </div>
+    <div class="field">
+      <label>Repository 名稱</label>
+      <input id="ghRepo" placeholder="例如 expense-tracker-data">
+    </div>
+    <div class="field">
+      <label>Personal Access Token</label>
+      <input id="ghToken" type="password" placeholder="github_pat_xxxxx">
+    </div>
+    <button class="btn-secondary" id="saveGhBtn">儲存設定並連線</button>
+    <button class="btn-secondary" id="syncNowBtn">立即手動同步</button>
+
+    <h3 style="font-size:13px;letter-spacing:2px;color:var(--ink-soft);margin:22px 0 8px;">分　類　管　理</h3>
+    <div class="cat-manage-list" id="catManageList"></div>
+    <button class="btn-secondary" id="addCatBtn">＋ 新增分類</button>
+  </section>
+
+</div>
+
+<nav class="tabbar">
+  <button class="tab-btn active" data-view="record"><span class="ic">✎</span><span class="lb">記帳</span></button>
+  <button class="tab-btn" data-view="overview"><span class="ic">📊</span><span class="lb">總覽</span></button>
+  <button class="tab-btn" data-view="settings"><span class="ic">⚙</span><span class="lb">設定</span></button>
+</nav>
+
+<div class="modal-overlay" id="catModal">
+  <div class="modal-box">
+    <h3>新增分類</h3>
+    <input id="newCatEmo" placeholder="輸入一個 emoji，例如 🍜" maxlength="4">
+    <input id="newCatName" placeholder="分類名稱，例如 夜市">
+    <div class="modal-actions">
+      <button class="cancel" id="catModalCancel">取消</button>
+      <button class="confirm" id="catModalConfirm">新增</button>
+    </div>
   </div>
-  <div class="last-run" id="lastRunLabel">尚未執行篩選</div>
-</header>
-
-<div class="apikey-bar">
-  <span class="apikey-label">API KEY</span>
-  <input class="apikey-input" id="apiKeyInput" type="password"
-    placeholder="貼上你的 Gemini API Key"
-    oninput="onApiKeyChange(this.value)" />
-  <span class="apikey-status" id="apiKeyStatus">未設定</span>
-  <span class="apikey-hint">取得免費 Key → <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com</a></span>
 </div>
 
-<div class="main">
-  <!-- SIDEBAR -->
-  <aside class="sidebar">
-    <div>
-      <div class="sidebar-section-title">選擇市場</div>
-      <button class="market-btn active" onclick="setMarket('both')" id="btn-both">
-        <span class="market-dot"></span> 台股 + 美股
-      </button>
-      <button class="market-btn" onclick="setMarket('tw')" id="btn-tw">
-        <span class="market-dot"></span> 台股
-      </button>
-      <button class="market-btn" onclick="setMarket('us')" id="btn-us">
-        <span class="market-dot"></span> 美股
-      </button>
-    </div>
-
-    <div>
-      <div class="sidebar-section-title">台股篩選條件</div>
-      <div class="criteria-block">
-        <div class="criteria-title">GOODINFO 初篩</div>
-        <div class="criteria-item">P/B &lt; 1.5</div>
-        <div class="criteria-item">ROE &gt; 10%</div>
-        <div class="criteria-item">近 3 年 EPS 穩定成長</div>
-      </div>
-      <div class="criteria-block">
-        <div class="criteria-title">CMONEY 進階</div>
-        <div class="criteria-item">自由現金流為正</div>
-        <div class="criteria-item">負債比 &lt; 40%</div>
-        <div class="criteria-item">市值 30–200 億</div>
-      </div>
-    </div>
-
-    <div>
-      <div class="sidebar-section-title">美股篩選條件</div>
-      <div class="criteria-block">
-        <div class="criteria-title">FINVIZ 初篩</div>
-        <div class="criteria-item">P/E &lt; 15</div>
-        <div class="criteria-item">P/B &lt; 2</div>
-        <div class="criteria-item">市值 $300M–$2B</div>
-      </div>
-      <div class="criteria-block">
-        <div class="criteria-title">GURUFOCUS 體檢</div>
-        <div class="criteria-item">GF Score 評分</div>
-        <div class="criteria-item">財務強度評級</div>
-        <div class="criteria-item">估值區間判斷</div>
-      </div>
-    </div>
-
-    <div>
-      <div class="sidebar-section-title">參考來源</div>
-      <div class="source-link"><span class="source-dot"></span> Goodinfo.tw</div>
-      <div class="source-link"><span class="source-dot"></span> CMoney</div>
-      <div class="source-link"><span class="source-dot"></span> Finviz.com</div>
-      <div class="source-link"><span class="source-dot"></span> Gurufocus</div>
-      <div class="source-link"><span class="source-dot"></span> Dataroma</div>
-      <div class="source-link"><span class="source-dot"></span> SEC EDGAR</div>
-    </div>
-  </aside>
-
-  <!-- MAIN CONTENT -->
-  <main class="content">
-    <div class="toolbar">
-      <button class="run-btn" id="runBtn" onclick="runScreener()">
-        <div class="spinner"></div>
-        <span class="btn-label">▶ 執行篩選</span>
-      </button>
-
-      <div class="market-toggle">
-        <button class="toggle-opt active" id="tog-both" onclick="setMarket('both')">全部</button>
-        <button class="toggle-opt" id="tog-tw" onclick="setMarket('tw')">台股</button>
-        <button class="toggle-opt" id="tog-us" onclick="setMarket('us')">美股</button>
-      </div>
-
-      <div class="status-bar" id="statusBar">就緒</div>
-    </div>
-
-    <div class="results" id="results">
-      <!-- LOG -->
-      <div class="log-box" id="logBox"></div>
-
-      <!-- ANALYSIS -->
-      <div class="analysis-panel" id="analysisPanel">
-        <div class="analysis-title">── AI 分析報告 ──────────────────</div>
-        <div class="analysis-content cursor-blink" id="analysisContent"></div>
-        <div class="chat-input-row">
-          <input class="chat-input" id="chatInput" placeholder="針對這次篩選結果追問，例如：幫我比較這兩檔哪個風險更低..." />
-          <button class="ask-btn" id="askBtn" onclick="askFollowUp()">送出</button>
-        </div>
-      </div>
-
-      <!-- RESULTS -->
-      <div id="stockResults"></div>
-
-      <!-- EMPTY STATE -->
-      <div class="empty-state" id="emptyState">
-        <div class="empty-icon">◈</div>
-        <h3>尚未執行篩選</h3>
-        <p>點擊「執行篩選」，AI 將根據左側條件搜尋目前市場上符合標準的候選個股</p>
-      </div>
-
-      <div class="disclaimer" id="disclaimerBox" style="display:none">
-        ⚠ 以上資料由 AI 根據公開資訊分析生成，僅供研究參考，非投資建議。請自行至 Goodinfo、Finviz、Gurufocus 核實最新數據後再做決策。投資有風險，決策自負。
-      </div>
-    </div>
-  </main>
-</div>
+<div class="toast" id="toast"></div>
 
 <script>
-let currentMarket = 'both';
-let conversationHistory = [];
-let lastScreenResult = '';
+(function(){
+  "use strict";
 
-function setMarket(m) {
-  currentMarket = m;
-  ['both','tw','us'].forEach(k => {
-    document.getElementById('btn-' + k).classList.toggle('active', k === m);
-    document.getElementById('tog-' + k).classList.toggle('active', k === m);
-  });
-}
+  /* ---------------- 資料層 ---------------- */
+  const LS_KEY = "expense_data_v1";
+  const LS_GH  = "expense_gh_config_v1";
 
-function logLine(msg, highlight) {
-  const box = document.getElementById('logBox');
-  box.classList.add('active');
-  const now = new Date();
-  const ts = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
-  const line = document.createElement('div');
-  line.className = 'log-line';
-  line.innerHTML = `<span class="log-time">${ts}</span><span class="log-msg${highlight?' highlight':''}">${msg}</span>`;
-  box.appendChild(line);
-  box.scrollTop = box.scrollHeight;
-}
+  const DEFAULT_CATEGORIES = [
+    {id:"food", emo:"🍱", name:"餐飲"},
+    {id:"transport", emo:"🚌", name:"交通"},
+    {id:"shopping", emo:"🛍", name:"購物"},
+    {id:"fun", emo:"🎬", name:"娛樂"},
+    {id:"home", emo:"🏠", name:"居家"},
+    {id:"medical", emo:"💊", name:"醫療"},
+    {id:"edu", emo:"📚", name:"教育"},
+    {id:"other", emo:"📎", name:"其他"},
+  ];
 
-function getApiKey() {
-  return (document.getElementById('apiKeyInput')?.value || '').trim();
-}
+  const PIE_COLORS = ["#a23b2e","#b08a3e","#5c6b5d","#7a8c63","#c97b6c","#8a6d3b","#3e6b8a","#6b4e8a"];
 
-function onApiKeyChange(val) {
-  const status = document.getElementById('apiKeyStatus');
-  const trimmed = val.trim();
-  if (trimmed.length > 20) {
-    status.textContent = '✓ 已設定';
-    status.className = 'apikey-status ok';
-    localStorage.setItem('screener_api_key', trimmed);
-  } else if (trimmed.length > 0) {
-    status.textContent = '格式有誤';
-    status.className = 'apikey-status';
-  } else {
-    status.textContent = '未設定';
-    status.className = 'apikey-status';
+  function loadData(){
+    try{
+      const raw = localStorage.getItem(LS_KEY);
+      if(raw) return JSON.parse(raw);
+    }catch(e){}
+    return {categories: DEFAULT_CATEGORIES.slice(), expenses: [], dirty:false, lastSyncedSha:null};
   }
-}
+  function saveLocal(data){
+    localStorage.setItem(LS_KEY, JSON.stringify(data));
+  }
+  function loadGhConfig(){
+    try{
+      const raw = localStorage.getItem(LS_GH);
+      if(raw) return JSON.parse(raw);
+    }catch(e){}
+    return {user:"", repo:"", token:""};
+  }
+  function saveGhConfig(cfg){
+    localStorage.setItem(LS_GH, JSON.stringify(cfg));
+  }
 
-function buildPrompt(market) {
-  const twPart = market !== 'us' ? `台股3檔（條件：P/B<1.5、ROE>10%、近3年EPS穩定、自由現金流正、負債比<40%、市值30-200億、董監持股高、冷門低覆蓋率）` : '';
-  const usPart = market !== 'tw' ? `美股3檔（條件：P/E<15、P/B<2、市值$300M-$2B、GF Score高、有內部人/聰明錢買進訊號、散戶覆蓋率低）` : '';
-  const twArr = market === 'us' ? '[]' : '[3個元素]';
-  const usArr = market === 'tw' ? '[]' : '[3個元素]';
-  return `你是價值投資分析師。找出適合3-5年長期持有的低估冷門個股：${twPart}${twPart && usPart ? '；' : ''}${usPart}。護城河清晰、避開純題材炒作股。
+  let state = loadData();
+  let gh = loadGhConfig();
 
-只輸出純JSON，絕對不要任何說明文字或markdown符號，格式：{"runDate":"${new Date().toLocaleDateString('zh-TW')}","summary":"一句摘要","tw":${twArr},"us":${usArr}}
+  /* ---------------- GitHub 同步 ---------------- */
+  const FILE_PATH = "data.json";
+  let syncInFlight = false;
 
-每個股票物件格式：{"ticker":"代號 名稱","industry":"產業","type":"value或growth或recovery","typeLabel":"標籤","metrics":[{"label":"指標","value":"數值"}],"desc":"2句分析","risk":"1句風險","scores":{"value":75,"growth":60,"safety":80}}
+  function ghApiUrl(){
+    return `https://api.github.com/repos/${gh.user}/${gh.repo}/contents/${FILE_PATH}`;
+  }
+  function hasGhConfig(){
+    return gh.user && gh.repo && gh.token;
+  }
+  function b64EncodeUnicode(str){
+    return btoa(unescape(encodeURIComponent(str)));
+  }
+  function b64DecodeUnicode(str){
+    return decodeURIComponent(escape(atob(str)));
+  }
 
-tw陣列需${market === 'us' ? '0' : '3'}個元素，us陣列需${market === 'tw' ? '0' : '3'}個元素。所有字串不含換行。`;
-}
+  function setSyncStatus(text, offline){
+    const el = document.getElementById("syncStatus");
+    el.textContent = text;
+    el.classList.toggle("offline", !!offline);
+  }
 
-async function runScreener() {
-  const btn = document.getElementById('runBtn');
-  const statusBar = document.getElementById('statusBar');
-  btn.classList.add('loading');
-  btn.disabled = true;
+  async function pullFromGithub(){
+    if(!hasGhConfig()) return null;
+    try{
+      const res = await fetch(ghApiUrl(), {
+        headers:{Authorization:`Bearer ${gh.token}`, Accept:"application/vnd.github+json"}
+      });
+      if(res.status === 404){
+        return {notFound:true};
+      }
+      if(!res.ok) throw new Error("HTTP "+res.status);
+      const json = await res.json();
+      const content = JSON.parse(b64DecodeUnicode(json.content));
+      return {content, sha: json.sha};
+    }catch(e){
+      return null;
+    }
+  }
 
-  document.getElementById('emptyState').style.display = 'none';
-  document.getElementById('stockResults').innerHTML = '';
-  document.getElementById('analysisPanel').classList.remove('active');
-  document.getElementById('disclaimerBox').style.display = 'none';
-  document.getElementById('logBox').innerHTML = '';
+  async function pushToGithub(){
+    if(!hasGhConfig() || syncInFlight) return false;
+    if(!navigator.onLine){
+      setSyncStatus("離線・待同步", true);
+      return false;
+    }
+    syncInFlight = true;
+    setSyncStatus("同步中…");
+    try{
+      // 先取得最新 sha，避免衝突
+      const latest = await pullFromGithub();
+      const sha = latest && !latest.notFound ? latest.sha : undefined;
 
-  logLine('初始化 AI 選股引擎...');
-  statusBar.textContent = '正在分析...';
+      const payload = {
+        categories: state.categories,
+        expenses: state.expenses
+      };
+      const body = {
+        message: `更新記帳資料 ${new Date().toISOString()}`,
+        content: b64EncodeUnicode(JSON.stringify(payload, null, 2)),
+      };
+      if(sha) body.sha = sha;
 
-  await sleep(400);
-  logLine(`市場範圍：${currentMarket === 'both' ? '台股 + 美股' : currentMarket === 'tw' ? '台股' : '美股'}`);
-  await sleep(300);
-  logLine('套用篩選條件：P/B、ROE、FCF、負債比...');
-  await sleep(500);
-  logLine('參考 Goodinfo、Finviz、Gurufocus 標準...', true);
-  await sleep(400);
-  logLine('比對聰明錢訊號（Dataroma / 13F）...');
-  await sleep(300);
-  logLine('AI 正在生成分析報告...', true);
+      const res = await fetch(ghApiUrl(), {
+        method:"PUT",
+        headers:{
+          Authorization:`Bearer ${gh.token}`,
+          Accept:"application/vnd.github+json",
+          "Content-Type":"application/json"
+        },
+        body: JSON.stringify(body)
+      });
+      if(!res.ok) throw new Error("HTTP "+res.status);
+      state.dirty = false;
+      saveLocal(state);
+      setSyncStatus("已同步 " + nowTimeLabel());
+      return true;
+    }catch(e){
+      setSyncStatus("同步失敗，將重試", true);
+      return false;
+    }finally{
+      syncInFlight = false;
+    }
+  }
 
-  try {
-    const apiKey = getApiKey();
-    if (!apiKey || apiKey.length < 20) {
-      logLine('請先在上方輸入有效的 Gemini API Key');
-      statusBar.textContent = '需要 API Key';
-      btn.classList.remove('loading');
-      btn.disabled = false;
+  function nowTimeLabel(){
+    const d = new Date();
+    return d.getHours().toString().padStart(2,"0")+":"+d.getMinutes().toString().padStart(2,"0");
+  }
+
+  async function initialSyncFromGithub(){
+    if(!hasGhConfig()){
+      setSyncStatus("尚未設定同步");
       return;
     }
-    const prompt = buildPrompt(currentMarket);
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${getApiKey()}`;
-    const response = await fetch(geminiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.7, maxOutputTokens: 4000 }
-      })
+    setSyncStatus("讀取雲端資料…");
+    const remote = await pullFromGithub();
+    if(remote && remote.notFound){
+      // repo 內還沒有檔案，直接把目前本機資料上傳
+      await pushToGithub();
+      return;
+    }
+    if(remote && remote.content){
+      // 用雲端版本為主（單裝置編輯情境下最新），但保留本機尚未同步的紀錄
+      const remoteIds = new Set((remote.content.expenses||[]).map(e=>e.id));
+      const localOnly = state.expenses.filter(e=>!remoteIds.has(e.id));
+      state.categories = remote.content.categories && remote.content.categories.length ? remote.content.categories : state.categories;
+      state.expenses = (remote.content.expenses||[]).concat(localOnly)
+        .sort((a,b)=> b.date.localeCompare(a.date) || b.id - a.id);
+      saveLocal(state);
+      renderAll();
+      if(localOnly.length){
+        pushToGithub();
+      }else{
+        setSyncStatus("已同步 " + nowTimeLabel());
+      }
+    }else{
+      setSyncStatus("離線，使用本機資料", true);
+    }
+  }
+
+  window.addEventListener("online", ()=>{
+    if(state.dirty) pushToGithub();
+  });
+  window.addEventListener("offline", ()=>{
+    setSyncStatus("離線・本機暫存", true);
+  });
+
+  function markDirtyAndSync(){
+    state.dirty = true;
+    saveLocal(state);
+    pushToGithub();
+  }
+
+  /* ---------------- Toast ---------------- */
+  let toastTimer;
+  function toast(msg){
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=>t.classList.remove("show"), 1800);
+  }
+
+  /* ---------------- 分頁切換 ---------------- */
+  const views = {
+    record: document.getElementById("view-record"),
+    overview: document.getElementById("view-overview"),
+    settings: document.getElementById("view-settings"),
+  };
+  document.querySelectorAll(".tab-btn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));
+      btn.classList.add("active");
+      Object.values(views).forEach(v=>v.classList.remove("active"));
+      views[btn.dataset.view].classList.add("active");
+      if(btn.dataset.view === "overview") renderOverview();
+      if(btn.dataset.view === "settings") renderSettingsPanel();
     });
+  });
 
-    const data = await response.json();
+  /* ---------------- 記帳頁 ---------------- */
+  let amountStr = "0";
+  let selectedCatId = state.categories[0] ? state.categories[0].id : null;
 
-    if (!response.ok) {
-      const msg = data.error?.message || `HTTP ${response.status}`;
-      throw new Error(`API錯誤：${msg}`);
+  function renderCatGrid(){
+    const grid = document.getElementById("catGrid");
+    grid.innerHTML = "";
+    state.categories.forEach(cat=>{
+      const chip = document.createElement("div");
+      chip.className = "cat-chip" + (cat.id===selectedCatId ? " selected":"");
+      chip.innerHTML = `<span class="emo">${cat.emo}</span><span class="name">${escapeHtml(cat.name)}</span>`;
+      chip.addEventListener("click", ()=>{
+        selectedCatId = cat.id;
+        renderCatGrid();
+        updateSaveBtnState();
+      });
+      grid.appendChild(chip);
+    });
+  }
+
+  function updateAmountDisplay(){
+    document.getElementById("amountDisplay").innerHTML =
+      `<span class="cur">NT$</span>${formatAmountStr(amountStr)}`;
+    updateSaveBtnState();
+  }
+  function formatAmountStr(s){
+    if(s.includes(".")){
+      const [a,b] = s.split(".");
+      return Number(a||0).toLocaleString() + "." + b;
     }
-    if (!data.candidates?.[0]?.content?.parts?.[0]?.text) {
-      throw new Error(`回應格式異常：${JSON.stringify(data).slice(0, 120)}`);
-    }
+    return Number(s||0).toLocaleString();
+  }
+  function updateSaveBtnState(){
+    const val = parseFloat(amountStr);
+    document.getElementById("saveBtn").disabled = !(val > 0 && selectedCatId);
+  }
 
-    let rawText = data.candidates[0].content.parts[0].text;
-
-    rawText = rawText.replace(/```json|```/g, '').trim();
-    lastScreenResult = rawText;
-
-    let parsed;
-    try {
-      parsed = JSON.parse(rawText);
-    } catch(e) {
-      const match = rawText.match(/\{[\s\S]*?\}/s);
-      if (match) {
-        try { parsed = JSON.parse(match[0]); }
-        catch(e2) { throw new Error('JSON格式錯誤，請重試'); }
-      } else {
-        throw new Error('回應格式錯誤，請重試');
+  document.getElementById("keypad").addEventListener("click", (e)=>{
+    const key = e.target.closest(".key");
+    if(!key) return;
+    const k = key.dataset.k;
+    if(k === "back"){
+      amountStr = amountStr.length>1 ? amountStr.slice(0,-1) : "0";
+    }else if(k === "."){
+      if(!amountStr.includes(".")) amountStr += ".";
+    }else{
+      if(amountStr === "0") amountStr = k;
+      else if(amountStr.split(".")[1] && amountStr.split(".")[1].length>=2){
+        /* 限制小數兩位 */
+      }else{
+        amountStr += k;
       }
     }
-    if (!parsed.tw) parsed.tw = [];
-    if (!parsed.us) parsed.us = [];
+    updateAmountDisplay();
+  });
 
-    conversationHistory = [
-      { role: 'user', content: prompt },
-      { role: 'assistant', content: rawText }
-    ];
-    
+  document.getElementById("saveBtn").addEventListener("click", ()=>{
+    const val = parseFloat(amountStr);
+    if(!(val>0) || !selectedCatId) return;
+    const entry = {
+      id: Date.now(),
+      amount: val,
+      categoryId: selectedCatId,
+      note: document.getElementById("noteInput").value.trim(),
+      date: new Date().toISOString().slice(0,10),
+      ts: new Date().toISOString(),
+    };
+    state.expenses.unshift(entry);
+    saveLocal(state);
+    markDirtyAndSync();
+    toast("已記下一筆　$" + val.toLocaleString());
 
-    logLine('篩選完成！找到候選個股。', true);
-    renderResults(parsed);
+    amountStr = "0";
+    document.getElementById("noteInput").value = "";
+    updateAmountDisplay();
+    renderOverview();
+  });
 
-    const now = new Date();
-    document.getElementById('lastRunLabel').textContent = `上次篩選：${now.getFullYear()}/${now.getMonth()+1}/${now.getDate()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-    statusBar.textContent = `篩選完成 · ${(parsed.tw||[]).length + (parsed.us||[]).length} 檔候選`;
-
-    document.getElementById('disclaimerBox').style.display = 'block';
-
-    if (parsed.summary) {
-      showAnalysis(parsed.summary);
-    }
-
-  } catch(err) {
-    logLine('發生錯誤：' + err.message);
-    statusBar.textContent = '錯誤，請重試';
-    document.getElementById('emptyState').style.display = 'flex';
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   }
 
-  btn.classList.remove('loading');
-  btn.disabled = false;
-}
+  /* ---------------- 總覽頁 ---------------- */
+  let viewMonth = new Date(); // 目前檢視的月份
 
-function renderResults(data) {
-  const container = document.getElementById('stockResults');
-  container.innerHTML = '';
+  function ymKey(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); }
 
-  const twStocks = data.tw || [];
-  const usStocks = data.us || [];
+  function renderOverview(){
+    const label = document.getElementById("ymLabel");
+    label.textContent = viewMonth.getFullYear()+" 年 "+(viewMonth.getMonth()+1)+" 月";
 
-  if (twStocks.length > 0) {
-    container.innerHTML += `
-      <div class="section-header">
-        <span class="section-flag">🇹🇼</span>
-        <span class="section-title">台股候選</span>
-        <span class="section-count">${twStocks.length} 檔</span>
-      </div>
-      <div class="cards-grid">${twStocks.map(s => stockCard(s)).join('')}</div>
-    `;
+    const todayStr = new Date().toISOString().slice(0,10);
+    const monthKey = ymKey(viewMonth);
+
+    const monthExpenses = state.expenses.filter(e=>e.date.startsWith(monthKey));
+    const todayExpenses = state.expenses.filter(e=>e.date===todayStr);
+
+    document.getElementById("todayTotal").textContent =
+      "$" + todayExpenses.reduce((s,e)=>s+e.amount,0).toLocaleString();
+    document.getElementById("monthTotal").textContent =
+      "$" + monthExpenses.reduce((s,e)=>s+e.amount,0).toLocaleString();
+
+    renderPie(monthExpenses);
+    renderEntryList(monthExpenses);
   }
 
-  if (usStocks.length > 0) {
-    container.innerHTML += `
-      <div class="section-header">
-        <span class="section-flag">🇺🇸</span>
-        <span class="section-title">美股候選</span>
-        <span class="section-count">${usStocks.length} 檔</span>
-      </div>
-      <div class="cards-grid">${usStocks.map(s => stockCard(s)).join('')}</div>
-    `;
+  function catById(id){
+    return state.categories.find(c=>c.id===id) || {emo:"❔",name:"未分類"};
   }
-}
 
-function stockCard(s) {
-  const badgeClass = s.type === 'value' ? 'badge-value' : s.type === 'growth' ? 'badge-growth' : 'badge-recovery';
-  const metrics = (s.metrics||[]).map(m => `<div class="metric-pill">${m.label} <span>${m.value}</span></div>`).join('');
-  const sc = s.scores || {};
-  const bars = [
-    { label: '估值', val: sc.value||50, color: '#4ade80' },
-    { label: '成長', val: sc.growth||50, color: '#60a5fa' },
-    { label: '安全', val: sc.safety||50, color: '#f59e0b' }
-  ].map(b => `
-    <div class="score-bar">
-      <span class="score-label">${b.label}</span>
-      <div class="bar-track"><div class="bar-fill" style="width:${b.val}%;background:${b.color}"></div></div>
-      <span class="bar-val">${b.val}</span>
-    </div>`).join('');
-
-  return `
-    <div class="stock-card" onclick="askAboutStock('${s.ticker}')">
-      <div class="card-top">
-        <div class="ticker-block">
-          <div class="ticker-sym">${s.ticker}</div>
-          <div class="ticker-name">${s.industry||''}</div>
-        </div>
-        <span class="badge ${badgeClass}">${s.typeLabel||s.type}</span>
-      </div>
-      <div class="metrics-row">${metrics}</div>
-      <div class="card-desc">${s.desc||''}</div>
-      <div class="card-risk">⚠ ${s.risk||''}</div>
-      ${bars}
-    </div>`;
-}
-
-function showAnalysis(text) {
-  const panel = document.getElementById('analysisPanel');
-  const content = document.getElementById('analysisContent');
-  panel.classList.add('active');
-  content.classList.add('cursor-blink');
-  content.textContent = '';
-
-  let i = 0;
-  const interval = setInterval(() => {
-    content.textContent += text[i] || '';
-    i++;
-    if (i >= text.length) {
-      clearInterval(interval);
-      content.classList.remove('cursor-blink');
-    }
-  }, 18);
-}
-
-function askAboutStock(ticker) {
-  document.getElementById('chatInput').value = `請深入分析 ${ticker} 的護城河、合理買入價與主要風險`;
-  document.getElementById('chatInput').focus();
-}
-
-async function askFollowUp() {
-  const input = document.getElementById('chatInput');
-  const btn = document.getElementById('askBtn');
-  const q = input.value.trim();
-  if (!q) return;
-
-  btn.disabled = true;
-  input.disabled = true;
-  btn.textContent = '...';
-
-  const panel = document.getElementById('analysisPanel');
-  const content = document.getElementById('analysisContent');
-  panel.classList.add('active');
-  content.classList.add('cursor-blink');
-
-  conversationHistory.push({ role: 'user', content: q });
-
-  try {
-    const geminiContents = conversationHistory.map(m => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }]
-    }));
-    const geminiUrl2 = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${getApiKey()}`;
-    const response = await fetch(geminiUrl2, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: geminiContents,
-        generationConfig: { temperature: 0.7, maxOutputTokens: 2000 }
-      })
+  function renderPie(expenses){
+    const byCat = {};
+    expenses.forEach(e=>{
+      byCat[e.categoryId] = (byCat[e.categoryId]||0) + e.amount;
     });
+    const entries = Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
+    const total = entries.reduce((s,[,v])=>s+v,0);
 
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.error?.message || `HTTP ${response.status}`);
+    const pieEl = document.getElementById("pieChart");
+    const legendEl = document.getElementById("pieLegend");
+
+    if(total===0){
+      pieEl.innerHTML = `<svg width="120" height="120" viewBox="0 0 120 120">
+        <circle cx="60" cy="60" r="50" fill="none" stroke="#e3d9c0" stroke-width="14"/>
+      </svg>`;
+      legendEl.innerHTML = `<div style="color:var(--ink-soft);font-size:12px;">本月尚無支出紀錄</div>`;
+      return;
     }
-    if (!data.candidates?.[0]?.content?.parts?.[0]?.text) {
-      throw new Error('回應格式異常');
-    }
-    let answer = data.candidates[0].content.parts[0].text;
 
-    conversationHistory.push({ role: 'assistant', content: answer });
+    let acc = 0;
+    const r = 50, cx=60, cy=60, circ = 2*Math.PI*r;
+    let svg = `<svg width="120" height="120" viewBox="0 0 120 120">`;
+    entries.forEach(([catId, amt], i)=>{
+      const frac = amt/total;
+      const dash = frac*circ;
+      const color = PIE_COLORS[i % PIE_COLORS.length];
+      svg += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="16"
+        stroke-dasharray="${dash} ${circ-dash}" stroke-dashoffset="${-acc}" transform="rotate(-90 ${cx} ${cy})"/>`;
+      acc += dash;
+    });
+    svg += `</svg>`;
+    pieEl.innerHTML = svg;
 
-    content.textContent = '';
-    let i = 0;
-    const interval = setInterval(() => {
-      content.textContent += answer[i] || '';
-      i++;
-      if (i >= answer.length) {
-        clearInterval(interval);
-        content.classList.remove('cursor-blink');
-      }
-    }, 10);
-
-  } catch(e) {
-    content.textContent = '分析失敗，請重試。';
-    content.classList.remove('cursor-blink');
+    legendEl.innerHTML = entries.map(([catId, amt], i)=>{
+      const cat = catById(catId);
+      const color = PIE_COLORS[i % PIE_COLORS.length];
+      return `<div class="li"><span class="dot" style="background:${color}"></span>
+        <span>${cat.emo} ${escapeHtml(cat.name)}</span>
+        <span class="amt">$${amt.toLocaleString()}</span></div>`;
+    }).join("");
   }
 
-  input.value = '';
-  input.disabled = false;
-  btn.disabled = false;
-  btn.textContent = '送出';
-}
-
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-</script>
-
-<script>
-window.addEventListener('DOMContentLoaded', () => {
-  const saved = localStorage.getItem('screener_api_key');
-  if (saved) {
-    const inp = document.getElementById('apiKeyInput');
-    if (inp) { inp.value = saved; onApiKeyChange(saved); }
+  function renderEntryList(expenses){
+    const list = document.getElementById("entryList");
+    list.innerHTML = "";
+    if(expenses.length===0){
+      list.innerHTML = `<div class="empty-state">這個月還沒有任何紀錄<br>從「記帳」分頁開始第一筆吧</div>`;
+      return;
+    }
+    const byDay = {};
+    expenses.forEach(e=>{
+      (byDay[e.date] = byDay[e.date]||[]).push(e);
+    });
+    Object.keys(byDay).sort((a,b)=>b.localeCompare(a)).forEach(day=>{
+      const head = document.createElement("li");
+      head.className = "day-head";
+      const dayTotal = byDay[day].reduce((s,e)=>s+e.amount,0);
+      head.textContent = day + "　・　小計 $" + dayTotal.toLocaleString();
+      list.appendChild(head);
+      byDay[day].forEach(e=>{
+        const cat = catById(e.categoryId);
+        const li = document.createElement("li");
+        li.className = "entry-item";
+        li.innerHTML = `
+          <span class="emo">${cat.emo}</span>
+          <span class="meta">
+            <span class="c">${escapeHtml(cat.name)}</span>
+            ${e.note ? `<span class="n"> ・ ${escapeHtml(e.note)}</span>`:""}
+          </span>
+          <span class="amt">$${e.amount.toLocaleString()}</span>
+          <span class="del" data-id="${e.id}">✕</span>
+        `;
+        list.appendChild(li);
+      });
+    });
+    list.querySelectorAll(".del").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const id = Number(btn.dataset.id);
+        if(!confirm("刪除這筆紀錄？")) return;
+        state.expenses = state.expenses.filter(e=>e.id!==id);
+        saveLocal(state);
+        markDirtyAndSync();
+        renderOverview();
+      });
+    });
   }
-});
-</script>
 
+  document.getElementById("prevMonth").addEventListener("click", ()=>{
+    viewMonth.setMonth(viewMonth.getMonth()-1);
+    renderOverview();
+  });
+  document.getElementById("nextMonth").addEventListener("click", ()=>{
+    viewMonth.setMonth(viewMonth.getMonth()+1);
+    renderOverview();
+  });
+
+  /* ---------------- 設定頁 ---------------- */
+  function renderSettingsPanel(){
+    document.getElementById("ghUser").value = gh.user||"";
+    document.getElementById("ghRepo").value = gh.repo||"";
+    document.getElementById("ghToken").value = gh.token||"";
+
+    const box = document.getElementById("settingsStatusBox");
+    if(hasGhConfig()){
+      box.innerHTML = `已連線到 <b>${escapeHtml(gh.user)}/${escapeHtml(gh.repo)}</b><br>共 ${state.expenses.length} 筆紀錄已暫存`;
+    }else{
+      box.textContent = "尚未設定 GitHub 同步，目前資料只存在這台裝置";
+    }
+    renderCatManageList();
+  }
+
+  document.getElementById("saveGhBtn").addEventListener("click", async ()=>{
+    gh = {
+      user: document.getElementById("ghUser").value.trim(),
+      repo: document.getElementById("ghRepo").value.trim(),
+      token: document.getElementById("ghToken").value.trim(),
+    };
+    saveGhConfig(gh);
+    toast("設定已儲存，開始連線…");
+    await initialSyncFromGithub();
+    renderSettingsPanel();
+  });
+
+  document.getElementById("syncNowBtn").addEventListener("click", async ()=>{
+    if(!hasGhConfig()){
+      toast("請先填寫並儲存 GitHub 設定");
+      return;
+    }
+    const ok = await pushToGithub();
+    toast(ok ? "同步完成" : "同步失敗，請檢查網路或 Token");
+    renderSettingsPanel();
+  });
+
+  function renderCatManageList(){
+    const list = document.getElementById("catManageList");
+    list.innerHTML = "";
+    state.categories.forEach(cat=>{
+      const row = document.createElement("div");
+      row.className = "cat-manage-item";
+      row.innerHTML = `<span class="emo">${cat.emo}</span><span class="name">${escapeHtml(cat.name)}</span><span class="del" data-id="${cat.id}">刪除</span>`;
+      list.appendChild(row);
+    });
+    list.querySelectorAll(".del").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const id = btn.dataset.id;
+        const inUse = state.expenses.some(e=>e.categoryId===id);
+        if(inUse){
+          toast("此分類已有紀錄使用，無法刪除");
+          return;
+        }
+        state.categories = state.categories.filter(c=>c.id!==id);
+        saveLocal(state);
+        markDirtyAndSync();
+        renderCatManageList();
+        renderCatGrid();
+      });
+    });
+  }
+
+  const catModal = document.getElementById("catModal");
+  document.getElementById("addCatBtn").addEventListener("click", ()=>{
+    document.getElementById("newCatEmo").value = "";
+    document.getElementById("newCatName").value = "";
+    catModal.classList.add("show");
+  });
+  document.getElementById("catModalCancel").addEventListener("click", ()=>{
+    catModal.classList.remove("show");
+  });
+  document.getElementById("catModalConfirm").addEventListener("click", ()=>{
+    const emo = document.getElementById("newCatEmo").value.trim() || "📌";
+    const name = document.getElementById("newCatName").value.trim();
+    if(!name){ toast("請輸入分類名稱"); return; }
+    const id = "c_" + Date.now();
+    state.categories.push({id, emo, name});
+    saveLocal(state);
+    markDirtyAndSync();
+    catModal.classList.remove("show");
+    renderCatManageList();
+    renderCatGrid();
+    toast("已新增分類");
+  });
+
+  /* ---------------- 初始化 ---------------- */
+  function renderAll(){
+    renderCatGrid();
+    updateAmountDisplay();
+    renderOverview();
+    renderSettingsPanel();
+  }
+
+  renderAll();
+  if(!navigator.onLine){
+    setSyncStatus("離線・本機模式", true);
+  }
+  initialSyncFromGithub();
+
+})();
+</script>
 </body>
 </html>
