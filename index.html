@@ -68,7 +68,7 @@
   .cat-chip.selected{border-color:var(--stamp);background:#fff7ef;transform:scale(1.04);}
   .cat-chip.add-new{border-style:dashed;color:var(--ink-soft);}
 
-  .keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;}
+  .keypad{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px;}
   .key{
     background:var(--card);border:1px solid var(--paper-line);border-radius:10px;
     padding:16px 0;text-align:center;font-size:20px;font-family:"Courier New",monospace;
@@ -114,8 +114,9 @@
   .entry-list .day-head{font-size:12px;color:var(--ink-soft);margin:14px 0 6px;letter-spacing:1px;}
   .entry-item{
     display:flex;align-items:center;gap:10px;padding:9px 4px;
-    border-bottom:1px solid var(--paper-line);
+    border-bottom:1px solid var(--paper-line);cursor:pointer;
   }
+  .entry-item:active{background:var(--paper-line);}
   .entry-item .emo{font-size:18px;width:24px;text-align:center;}
   .entry-item .meta{flex:1;}
   .entry-item .meta .c{font-size:13px;}
@@ -210,10 +211,10 @@
     <input class="note-input" id="noteInput" placeholder="備註（選填）">
 
     <div class="keypad" id="keypad">
-      <div class="key" data-k="1">1</div><div class="key" data-k="2">2</div><div class="key" data-k="3">3</div>
-      <div class="key" data-k="4">4</div><div class="key" data-k="5">5</div><div class="key" data-k="6">6</div>
-      <div class="key" data-k="7">7</div><div class="key" data-k="8">8</div><div class="key" data-k="9">9</div>
-      <div class="key fn" data-k="back">⌫</div><div class="key" data-k="0">0</div><div class="key" data-k=".">.</div>
+      <div class="key" data-k="7">7</div><div class="key" data-k="8">8</div><div class="key" data-k="9">9</div><div class="key fn" data-k="back">⌫</div>
+      <div class="key" data-k="4">4</div><div class="key" data-k="5">5</div><div class="key" data-k="6">6</div><div class="key fn" data-k="+">＋</div>
+      <div class="key" data-k="1">1</div><div class="key" data-k="2">2</div><div class="key" data-k="3">3</div><div class="key fn" data-k="-">－</div>
+      <div class="key fn" data-k="clear">C</div><div class="key" data-k="0">0</div><div class="key" data-k=".">.</div><div class="key fn" data-k="=">＝</div>
     </div>
 
     <button class="btn-save" id="saveBtn" disabled>記　　下</button>
@@ -290,6 +291,20 @@
       <button class="cancel" id="catModalCancel">取消</button>
       <button class="confirm" id="catModalConfirm">新增</button>
     </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="editModal">
+  <div class="modal-box">
+    <h3>編輯紀錄</h3>
+    <input id="editAmount" type="number" step="0.01" placeholder="金額">
+    <select id="editCategory" style="width:100%;padding:10px;border:1px solid var(--paper-line);border-radius:8px;margin-bottom:10px;background:var(--card);font-family:inherit;"></select>
+    <input id="editNote" placeholder="備註（選填）">
+    <div class="modal-actions">
+      <button class="cancel" id="editModalDelete" style="color:var(--stamp);">刪除</button>
+      <button class="confirm" id="editModalConfirm">儲存</button>
+    </div>
+    <button class="cancel" id="editModalCancel" style="width:100%;margin-top:8px;">取消</button>
   </div>
 </div>
 
@@ -522,20 +537,35 @@
     });
   }
 
+  function evaluateExpr(s){
+    const clean = s.replace(/[+\-]+$/, "");
+    if(clean === "") return 0;
+    const parts = clean.split(/([+\-])/).filter(x=>x!=="");
+    let total = parseFloat(parts[0]) || 0;
+    for(let i=1;i<parts.length;i+=2){
+      const op = parts[i];
+      const num = parseFloat(parts[i+1]) || 0;
+      total = op === "+" ? total+num : total-num;
+    }
+    return Math.round(total*100)/100;
+  }
+  function formatExpr(s){
+    return s.replace(/(\d+(\.\d*)?)/g, (m)=>{
+      if(m.endsWith(".")){
+        return Number(m.slice(0,-1)||0).toLocaleString() + ".";
+      }
+      const [a,b] = m.split(".");
+      return Number(a||0).toLocaleString() + (b!==undefined ? "."+b : "");
+    }).replace(/\+/g, " ＋ ").replace(/-/g, " － ");
+  }
+
   function updateAmountDisplay(){
     document.getElementById("amountDisplay").innerHTML =
-      `<span class="cur">NT$</span>${formatAmountStr(amountStr)}`;
+      `<span class="cur">NT$</span>${formatExpr(amountStr)}`;
     updateSaveBtnState();
   }
-  function formatAmountStr(s){
-    if(s.includes(".")){
-      const [a,b] = s.split(".");
-      return Number(a||0).toLocaleString() + "." + b;
-    }
-    return Number(s||0).toLocaleString();
-  }
   function updateSaveBtnState(){
-    const val = parseFloat(amountStr);
+    const val = evaluateExpr(amountStr);
     document.getElementById("saveBtn").disabled = !(val > 0 && selectedCatId);
   }
 
@@ -543,14 +573,30 @@
     const key = e.target.closest(".key");
     if(!key) return;
     const k = key.dataset.k;
+
     if(k === "back"){
       amountStr = amountStr.length>1 ? amountStr.slice(0,-1) : "0";
-    }else if(k === "."){
-      if(!amountStr.includes(".")) amountStr += ".";
+    }else if(k === "clear"){
+      amountStr = "0";
+    }else if(k === "="){
+      amountStr = String(evaluateExpr(amountStr));
+    }else if(k === "+" || k === "-"){
+      const lastChar = amountStr[amountStr.length-1];
+      if(lastChar === "+" || lastChar === "-"){
+        amountStr = amountStr.slice(0,-1) + k;
+      }else if(amountStr !== "0" || amountStr.length>1){
+        amountStr += k;
+      }
     }else{
-      if(amountStr === "0") amountStr = k;
-      else if(amountStr.split(".")[1] && amountStr.split(".")[1].length>=2){
+      // 數字 或 小數點：套用在目前運算式「最後一段」數字上
+      const lastOpIdx = Math.max(amountStr.lastIndexOf("+"), amountStr.lastIndexOf("-"));
+      const seg = amountStr.slice(lastOpIdx+1);
+      if(k === "."){
+        if(!seg.includes(".")) amountStr += ".";
+      }else if(seg.split(".")[1] && seg.split(".")[1].length>=2){
         /* 限制小數兩位 */
+      }else if(seg === "0"){
+        amountStr = amountStr.slice(0, lastOpIdx+1) + k;
       }else{
         amountStr += k;
       }
@@ -559,7 +605,7 @@
   });
 
   document.getElementById("saveBtn").addEventListener("click", ()=>{
-    const val = parseFloat(amountStr);
+    const val = evaluateExpr(amountStr);
     if(!(val>0) || !selectedCatId) return;
     const entry = {
       id: Date.now(),
@@ -675,6 +721,7 @@
         const cat = catById(e.categoryId);
         const li = document.createElement("li");
         li.className = "entry-item";
+        li.dataset.id = e.id;
         li.innerHTML = `
           <span class="emo">${cat.emo}</span>
           <span class="meta">
@@ -684,11 +731,16 @@
           <span class="amt">$${e.amount.toLocaleString()}</span>
           <span class="del" data-id="${e.id}">✕</span>
         `;
+        li.addEventListener("click", (ev)=>{
+          if(ev.target.closest(".del")) return;
+          openEditModal(e.id);
+        });
         list.appendChild(li);
       });
     });
     list.querySelectorAll(".del").forEach(btn=>{
-      btn.addEventListener("click", ()=>{
+      btn.addEventListener("click", (ev)=>{
+        ev.stopPropagation();
         const id = Number(btn.dataset.id);
         if(!confirm("刪除這筆紀錄？")) return;
         state.expenses = state.expenses.filter(e=>e.id!==id);
@@ -698,6 +750,52 @@
       });
     });
   }
+
+  /* ---------------- 編輯紀錄 ---------------- */
+  const editModal = document.getElementById("editModal");
+  let editingId = null;
+
+  function openEditModal(id){
+    const entry = state.expenses.find(e=>e.id===id);
+    if(!entry) return;
+    editingId = id;
+    document.getElementById("editAmount").value = entry.amount;
+    document.getElementById("editNote").value = entry.note || "";
+    const sel = document.getElementById("editCategory");
+    sel.innerHTML = state.categories.map(c=>
+      `<option value="${c.id}" ${c.id===entry.categoryId?"selected":""}>${c.emo} ${escapeHtml(c.name)}</option>`
+    ).join("");
+    editModal.classList.add("show");
+  }
+  document.getElementById("editModalCancel").addEventListener("click", ()=>{
+    editModal.classList.remove("show");
+    editingId = null;
+  });
+  document.getElementById("editModalConfirm").addEventListener("click", ()=>{
+    const entry = state.expenses.find(e=>e.id===editingId);
+    if(!entry) return;
+    const val = parseFloat(document.getElementById("editAmount").value);
+    if(!(val>0)){ toast("請輸入正確金額"); return; }
+    entry.amount = Math.round(val*100)/100;
+    entry.categoryId = document.getElementById("editCategory").value;
+    entry.note = document.getElementById("editNote").value.trim();
+    saveLocal(state);
+    markDirtyAndSync();
+    editModal.classList.remove("show");
+    editingId = null;
+    renderOverview();
+    toast("已更新紀錄");
+  });
+  document.getElementById("editModalDelete").addEventListener("click", ()=>{
+    if(!confirm("刪除這筆紀錄？")) return;
+    state.expenses = state.expenses.filter(e=>e.id!==editingId);
+    saveLocal(state);
+    markDirtyAndSync();
+    editModal.classList.remove("show");
+    editingId = null;
+    renderOverview();
+    toast("已刪除紀錄");
+  });
 
   document.getElementById("prevMonth").addEventListener("click", ()=>{
     viewMonth.setMonth(viewMonth.getMonth()-1);
