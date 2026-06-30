@@ -451,6 +451,13 @@
       setSyncStatus("尚未設定同步");
       return;
     }
+    if(state.dirty){
+      // 本機還有尚未成功上傳的最新異動，不可以用雲端舊資料覆蓋，改成直接把本機最新版本上傳
+      setSyncStatus("上傳本機最新資料…");
+      await pushToGithub();
+      renderAll();
+      return;
+    }
     setSyncStatus("讀取雲端資料…");
     const remote = await pullFromGithub();
     if(remote && remote.notFound){
@@ -459,7 +466,7 @@
       return;
     }
     if(remote && remote.content){
-      // 用雲端版本為主（單裝置編輯情境下最新），但保留本機尚未同步的紀錄
+      // 本機沒有未同步的異動時，才安全地用雲端版本為主，並保留本機尚未同步的紀錄
       const remoteIds = new Set((remote.content.expenses||[]).map(e=>e.id));
       const localOnly = state.expenses.filter(e=>!remoteIds.has(e.id));
       state.categories = remote.content.categories && remote.content.categories.length ? remote.content.categories : state.categories;
@@ -838,8 +845,16 @@
       toast("請先填寫並儲存 GitHub 設定");
       return;
     }
+    if(syncInFlight){
+      toast("同步進行中，請稍候再試一次");
+      return;
+    }
+    if(!navigator.onLine){
+      toast("目前沒有網路連線，請確認 Wi-Fi 或行動數據");
+      return;
+    }
     const ok = await pushToGithub();
-    toast(ok ? "同步完成" : "同步失敗，請檢查網路或 Token");
+    toast(ok ? "同步完成" : "同步失敗，請檢查網路或 Token 是否正確");
     renderSettingsPanel();
   });
 
